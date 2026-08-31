@@ -23,8 +23,12 @@
  *    arbitrary file names, so the plugin's own host route serves the chunks),
  * 2. read the factory from the global registry,
  * 3. call it with a require that resolves the platform externals through
- *    `__DSH_MODULES__.import(spec)` — the seed-word branch, the one part of
- *    the module system that is stable across versions.
+ *    `ctx.modules.import(spec)` — the seed-word branch, the one part of
+ *    the module system that is stable across versions. The module system
+ *    itself is captured at activation from `ctx.modules` (see
+ *    {@link setChunkModuleSystem}); the retired `window.__DSH_MODULES__`
+ *    global stopped existing when the shell closed its bootstrap loop
+ *    (dsh 2026-08-17) and must not come back through here.
  *
  * Caching contract (three layers, each with a failure path):
  * - In-memory: one in-flight promise per chunk, memoized until
@@ -74,14 +78,29 @@ export const CHUNK_EXTERNALS: readonly string[] = [
 /** Chunk script endpoint served by the plugin host half (src/bundle-route.ts). */
 const CHUNK_URL = (name: ChunkName): string => `/sidebar/bundle/${name}.js`
 
-/** The client module system surface this loader needs (window.__DSH_MODULES__). */
+/** The client module system face this loader needs: the dynamic-import branch
+ * over the module table (seed words and shell-own modules). */
 interface ChunkModuleSystem {
   import(specifier: string): Promise<unknown>
 }
 
-/** Resolve the shell-installed module system (set before any plugin activates). */
-function moduleSystem(): ChunkModuleSystem | undefined {
-  return (globalThis as { __DSH_MODULES__?: ChunkModuleSystem }).__DSH_MODULES__
+/**
+ * The module system captured at plugin activation (`ctx.modules`, provided by
+ * dsh-client-modules before any plugin boots). The retired
+ * `window.__DSH_MODULES__` global stopped existing when the shell closed its
+ * bootstrap loop (dsh 2026-08-17); the cordis service is the supported face
+ * on every shell version, old and new.
+ */
+let chunkModuleSystem: ChunkModuleSystem | undefined
+
+/**
+ * Capture the client module system for later chunk loads. Called from the
+ * plugin's client `apply` before anything mounts; passing `undefined`
+ * (tests) re-arms the unavailable error.
+ * @param modules - the `ctx.modules` service, or `undefined` to clear.
+ */
+export function setChunkModuleSystem(modules: ChunkModuleSystem | undefined): void {
+  chunkModuleSystem = modules
 }
 
 /** The plugin-owned chunk factory registry the chunk scripts populate. */
@@ -168,9 +187,9 @@ export function loadChunk(name: ChunkName): Promise<ChunkExports> {
   const task = (async (): Promise<ChunkExports> => {
     const test = testLoaders.get(name)
     if (test !== undefined) return test()
-    const modules = moduleSystem()
+    const modules = chunkModuleSystem
     if (modules === undefined) {
-      throw new Error(`[dsh-better-sidebar] chunk "${name}": client module system unavailable`)
+      throw new Error(`[dsh-better-sidebar] chunk "${name}": client module system not captured at activation`)
     }
     await scriptLoader(CHUNK_URL(name))
     const factory = chunkRegistry()[name]
@@ -189,7 +208,9 @@ export function loadChunk(name: ChunkName): Promise<ChunkExports> {
  * Drop all chunk state for a fresh plugin activation (HMR-safe): clear the
  * in-memory cache and any test-registry entries, so the next lazy open
  * re-fetches and re-executes the current chunk scripts (the registry slots
- * are overwritten by the re-execution — no cleanup needed).
+ * are overwritten by the re-execution — no cleanup needed). The module-system
+ * capture is not chunk state: the instance is kernel-owned and re-set at
+ * every activation by the plugin's `apply`.
  */
 export function resetChunks(): void {
   cache.clear()

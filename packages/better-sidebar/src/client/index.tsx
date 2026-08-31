@@ -13,7 +13,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import type { Context } from '../context-types.ts'
 import { createSidebarStore } from './state.ts'
 import { createBetterSidebarService, matchUrlTarget } from './service.ts'
-import { resetChunks } from './chunk-loader.ts'
+import { resetChunks, setChunkModuleSystem } from './chunk-loader.ts'
 import { registerBuiltins } from './builtins/index.ts'
 import { Sidebar } from './Sidebar.tsx'
 import { RenderBoundary } from './RenderBoundary.tsx'
@@ -30,7 +30,7 @@ import './layout.css'
 
 /** Services required before mounting (provided by the client runtime; the
  *  locale service backs the sidebar's copy — see locales.ts). */
-export const inject = ['slots', 'sessions', 'connection', 'workspaces', 'locale']
+export const inject = ['slots', 'sessions', 'connection', 'workspaces', 'locale', 'modules']
 
 /**
  * Error boundary over the sidebar tree (root scope): a render error in the
@@ -94,6 +94,10 @@ export function apply(ctx: Context): void {
     // registered by a previous fiber (HMR) and drop the in-memory load cache
     // so the next lazy open re-fetches the current chunk scripts.
     resetChunks()
+    // Capture the module system for the lazy chunk loader. The retired
+    // window.__DSH_MODULES__ global is gone on shells since dsh 2026-08-17;
+    // `ctx.modules` is the supported face on every shell version.
+    setChunkModuleSystem(ctx.modules)
     ctx.effect(() => {
       let disposed = false
       let root: Root | undefined
