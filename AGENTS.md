@@ -35,6 +35,10 @@ A finished change is not done until it is on the remotes users install from. Do 
 
 Git installs (`#path:packages/<name>`) see this repository's `main` after the push. npm installs see the published version only.
 
+## Committed `lib/`
+
+Git installs fetch the repository as-is: pnpm does not build, so a `#path:` install only works when the package's `lib/` build output is committed (the `dsh-effort-slider` model — `main: lib/index.js` must resolve without a build step). Every `packages/<name>` therefore tracks its built `lib/*.js` and `lib/types/*.d.ts` (never `*.map`). After any source change: `pnpm run build` from the repository root, then commit the refreshed `lib/` in the same PR.
+
 ## Commands
 
 ```sh

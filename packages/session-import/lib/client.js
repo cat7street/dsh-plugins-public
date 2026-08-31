@@ -41,7 +41,7 @@ if (typeof document !== "undefined" && document.querySelector("style[data-plugin
   tag.textContent = css;
   document.head.appendChild(tag);
 }
-var SessionImportSection_default = { "tabs": "YmEt6W_tabs", "failure": "YmEt6W_failure", "search": "YmEt6W_search", "toolbar": "YmEt6W_toolbar", "status": "YmEt6W_status", "row": "YmEt6W_row", "meta": "YmEt6W_meta", "progress": "YmEt6W_progress", "intro": "YmEt6W_intro", "progressBar": "YmEt6W_progressBar", "button": "YmEt6W_button", "select": "YmEt6W_select", "section": "YmEt6W_section", "heading": "YmEt6W_heading", "empty": "YmEt6W_empty", "list": "YmEt6W_list", "tag": "YmEt6W_tag", "hint": "YmEt6W_hint", "title": "YmEt6W_title", "tab": "YmEt6W_tab" };
+var SessionImportSection_default = { "heading": "YmEt6W_heading", "meta": "YmEt6W_meta", "progress": "YmEt6W_progress", "title": "YmEt6W_title", "button": "YmEt6W_button", "select": "YmEt6W_select", "intro": "YmEt6W_intro", "row": "YmEt6W_row", "section": "YmEt6W_section", "list": "YmEt6W_list", "empty": "YmEt6W_empty", "search": "YmEt6W_search", "toolbar": "YmEt6W_toolbar", "status": "YmEt6W_status", "tab": "YmEt6W_tab", "progressBar": "YmEt6W_progressBar", "failure": "YmEt6W_failure", "hint": "YmEt6W_hint", "tag": "YmEt6W_tag", "tabs": "YmEt6W_tabs" };
 
 // src/client/SessionImportSection.tsx
 var import_jsx_runtime = require("react/jsx-runtime");
