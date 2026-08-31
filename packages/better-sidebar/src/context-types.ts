@@ -429,6 +429,18 @@ export interface SidebarAgent {
   }
 }
 
+/**
+ * The client module system face the lazy chunk loader needs (mirror of
+ * `@deepseek-ai/dsh-client-modules`' ClientModuleSystem import branch).
+ * Provided by dsh-client-modules before any plugin boots; the retired
+ * `window.__DSH_MODULES__` global no longer exists on shells since
+ * dsh 2026-08-17. Client side only.
+ */
+export interface SidebarClientModules {
+  /** Dynamic import through the module table (seed words, shell-own modules). */
+  import(specifier: string): Promise<unknown>
+}
+
 declare module 'cordis' {
   interface Context {
     webServer: SidebarWebServer
@@ -440,6 +452,12 @@ declare module 'cordis' {
     settings: SidebarSettingsService
     invariants: SidebarInvariantsService
     tools: SidebarToolsService
+    /**
+     * The client module system (`@deepseek-ai/dsh-client-modules`): the
+     * lazy chunk loader resolves platform externals through its import
+     * branch. Client side only.
+     */
+    modules: SidebarClientModules
     /**
      * The client locale service (`@deepseek-ai/dsh-client-locale`): the
      * sidebar's copy follows its active locale and registers its

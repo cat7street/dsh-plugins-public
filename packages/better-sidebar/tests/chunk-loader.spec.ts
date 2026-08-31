@@ -8,9 +8,11 @@
  * - externals resolve through the module system's seed branch (the stable,
  *   version-independent part), once per page,
  * - resetChunks drops the cache and the externals memo (HMR).
- * The production path runs against a fake `window.__DSH_MODULES__` and a
- * stub script loader that simulates the executed chunk script by assigning
- * the plugin-owned global factory registry.
+ * The production path installs a fake module system through
+ * {@link setChunkModuleSystem} (the `ctx.modules` capture at activation —
+ * the retired `window.__DSH_MODULES__` global no longer exists on shells
+ * since dsh 2026-08-17) and a stub script loader that simulates the executed
+ * chunk script by assigning the plugin-owned global factory registry.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './browser-globals.ts'
@@ -19,6 +21,7 @@ import {
   loadChunk,
   registerChunkForTests,
   resetChunks,
+  setChunkModuleSystem,
   setChunkScriptLoaderForTests,
 } from '../src/client/chunk-loader.ts'
 import type { ChunkExports } from '../src/client/chunk-loader.ts'
@@ -31,12 +34,8 @@ function installModuleSystem(): FakeModuleSystem {
   const fake: FakeModuleSystem = {
     import: vi.fn(async (specifier: string) => ({ seed: specifier })),
   }
-  ;(globalThis as Record<string, unknown>).__DSH_MODULES__ = fake
+  setChunkModuleSystem(fake)
   return fake
-}
-
-function removeModuleSystem(): void {
-  delete (globalThis as Record<string, unknown>).__DSH_MODULES__
 }
 
 /** The global registry the chunk scripts populate (mirror of chunk-loader). */
@@ -52,7 +51,7 @@ function simulateScript(name: string, factory: (require: (spec: string) => unkno
 }
 
 beforeEach(() => {
-  removeModuleSystem()
+  setChunkModuleSystem(undefined)
   delete (globalThis as Record<string, unknown>).__dshChunks__
   resetChunks()
   setChunkScriptLoaderForTests(null)
@@ -161,10 +160,10 @@ describe('production path (script injection + global registry + externals requir
     expect(modules.import).toHaveBeenCalled()
   })
 
-  it('fails loudly when no module system is installed (before touching the network)', async () => {
+  it('fails loudly when no module system was captured (before touching the network)', async () => {
     const loaded: string[] = []
     setChunkScriptLoaderForTests(async (src) => { loaded.push(src) })
-    await expect(loadChunk('editor')).rejects.toThrow('client module system unavailable')
+    await expect(loadChunk('editor')).rejects.toThrow('client module system not captured at activation')
     expect(loaded).toEqual([])
   })
 
