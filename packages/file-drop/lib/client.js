@@ -122,6 +122,31 @@ function joinInsertion(existing, chunk) {
   const next = existing + sep + chunk;
   return { next, caret: next.length };
 }
+function pickComposerSurface(card) {
+  const input = card.querySelector("[data-composer-input]");
+  if (input !== null) {
+    return {
+      kind: "contenteditable",
+      editable: input.getAttribute("contenteditable") === "true"
+    };
+  }
+  const textarea = card.querySelector("textarea");
+  if (textarea !== null) {
+    return {
+      kind: "textarea",
+      editable: textarea.getAttribute("disabled") === null && textarea.getAttribute("readonly") === null
+    };
+  }
+  return null;
+}
+function composerDraftText(raw) {
+  return raw.replace(/\r\n/g, "\n").replace(/\u00a0/g, " ").replace(/\n+$/g, "");
+}
+function composerAppendText(existingRaw, chunk) {
+  const existing = composerDraftText(existingRaw);
+  const { next } = joinInsertion(existing, chunk);
+  return { insert: next.slice(existing.length), next };
+}
 function collectDropPaths(files, uriList) {
   const uris = parseUriList(uriList);
   const known = [];
@@ -157,19 +182,17 @@ function fileTransfer(event) {
   if (data.types.includes("Files") || data.types.includes("text/uri-list")) return data;
   return null;
 }
-function activeComposer() {
+function activeComposerCard() {
   const cards = document.querySelectorAll("[data-composer-card]");
   for (let i = cards.length - 1; i >= 0; i -= 1) {
     const card = cards[i];
     if (card === void 0) continue;
-    const textarea = card.querySelector("textarea");
-    if (textarea instanceof HTMLTextAreaElement && !textarea.disabled && !textarea.readOnly) return textarea;
+    if (pickComposerSurface(card)?.editable === true) return card;
   }
   return null;
 }
-function insertIntoComposer(chunk) {
-  const target = activeComposer();
-  if (target === null) return false;
+function insertIntoTextarea(target, chunk) {
+  if (target.disabled || target.readOnly) return false;
   const { next, caret } = joinInsertion(target.value, chunk);
   const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
   if (nativeSetter === void 0) return false;
@@ -178,6 +201,42 @@ function insertIntoComposer(chunk) {
   target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertFromDrop", data: chunk }));
   target.focus({ preventScroll: true });
   return true;
+}
+function dispatchPlainPaste(target, text) {
+  try {
+    const dt = new DataTransfer();
+    dt.setData("text/plain", text);
+    const paste = new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: dt });
+    Object.defineProperty(paste, "clipboardData", { value: dt });
+    target.dispatchEvent(paste);
+    return paste.defaultPrevented;
+  } catch {
+    return false;
+  }
+}
+function insertIntoContentEditable(target, chunk) {
+  if (target.getAttribute("contenteditable") !== "true") return false;
+  const { insert } = composerAppendText(target.innerText ?? target.textContent ?? "", chunk);
+  target.focus({ preventScroll: true });
+  const selection = window.getSelection();
+  if (selection !== null) {
+    const range = document.createRange();
+    range.selectNodeContents(target);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  if (dispatchPlainPaste(target, insert)) return true;
+  return document.execCommand("insertText", false, insert);
+}
+function insertIntoComposer(chunk) {
+  const card = activeComposerCard();
+  if (card === null) return false;
+  const editable = card.querySelector('[data-composer-input][contenteditable="true"]');
+  if (editable !== null) return insertIntoContentEditable(editable, chunk);
+  const textarea = card.querySelector("textarea");
+  if (textarea instanceof HTMLTextAreaElement) return insertIntoTextarea(textarea, chunk);
+  return false;
 }
 async function fileToBase64(file) {
   const buffer = await file.arrayBuffer();

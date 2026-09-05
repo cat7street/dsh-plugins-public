@@ -10,7 +10,7 @@ dsh Web 对话区拖入非图片文件时，不再弹出「仅支持 PNG、JPG�
 - Finder / 桌面端能给出 `file://` 或 `File.path` 时，插入真实本机路径。
 - **超过 256 KB** 只插入简要信息（路径、大小、large file），不读、不暂存、不把内容写进输入框。
 - 浏览器拿不到路径、且文件小于 256 KB 时，Host 把文件写到 `~/.dsh/dropped/<uuid>-<name>`，再插入这条路径。
-- 锁定、只读或没有可用输入框时，不会插入。
+- 写入当前 Lexical 输入框（`[data-composer-input][contenteditable=true]`）；旧版 textarea 仍兼容。锁定、只读或没有可用输入框时，不会插入。
 
 ## 安装
 

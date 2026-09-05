@@ -11,8 +11,12 @@ import {
   isImageMediaType,
   joinInsertion,
   parseUriList,
+  pickActiveComposerSurface,
+  pickComposerSurface,
   quotePath,
   collectDropPaths,
+  composerAppendText,
+  composerDraftText,
   resolveDroppedPath,
   safeDroppedName,
   shouldClaimTransfer,
@@ -92,6 +96,43 @@ test('joinInsertion appends with a newline when needed', () => {
   assert.deepEqual(joinInsertion('', '/tmp/a.ts'), { next: '/tmp/a.ts', caret: '/tmp/a.ts'.length })
   assert.deepEqual(joinInsertion('hello', '/tmp/a.ts'), { next: 'hello\n/tmp/a.ts', caret: 'hello\n/tmp/a.ts'.length })
   assert.deepEqual(joinInsertion('hello\n', '/tmp/a.ts'), { next: 'hello\n/tmp/a.ts', caret: 'hello\n/tmp/a.ts'.length })
+})
+
+test('composer surfaces prefer an editable contenteditable input', () => {
+  const card = {
+    querySelector: (selector: string) => {
+      if (selector === '[data-composer-input]') return { getAttribute: (name: string) => name === 'contenteditable' ? 'true' : null }
+      return null
+    },
+  }
+  assert.deepEqual(pickComposerSurface(card), { kind: 'contenteditable', editable: true })
+})
+
+test('locked contenteditable and missing inputs are skipped', () => {
+  const locked = {
+    querySelector: (selector: string) => {
+      if (selector === '[data-composer-input]') return { getAttribute: (name: string) => name === 'contenteditable' ? 'false' : null }
+      return null
+    },
+  }
+  const textarea = {
+    querySelector: (selector: string) => {
+      if (selector === 'textarea') return { getAttribute: () => null }
+      return null
+    },
+  }
+  const empty = { querySelector: () => null }
+  assert.deepEqual(pickComposerSurface(locked), { kind: 'contenteditable', editable: false })
+  assert.deepEqual(pickComposerSurface(textarea), { kind: 'textarea', editable: true })
+  assert.equal(pickComposerSurface(empty), null)
+  assert.equal(pickActiveComposerSurface([locked, empty]), null)
+  assert.deepEqual(pickActiveComposerSurface([locked, textarea]), { kind: 'textarea', editable: true })
+})
+
+test('composer append uses the existing draft and a leading newline', () => {
+  assert.equal(composerDraftText('hello\n\n'), 'hello')
+  assert.deepEqual(composerAppendText('hello\n', '/tmp/a.ts'), { insert: '\n/tmp/a.ts', next: 'hello\n/tmp/a.ts' })
+  assert.deepEqual(composerAppendText('', '/tmp/a.ts'), { insert: '/tmp/a.ts', next: '/tmp/a.ts' })
 })
 
 test('collectDropPaths uses File.path, unique URIs, then leftover files', () => {

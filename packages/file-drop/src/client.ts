@@ -3,9 +3,11 @@
 import {
   DEFAULT_BRIEF_BYTES,
   collectDropPaths,
+  composerAppendText,
   formatDroppedBriefs,
   isBriefOnly,
   joinInsertion,
+  pickComposerSurface,
   shouldClaimTransfer,
   type DroppedFile,
   type DroppedFileBrief,
@@ -40,20 +42,18 @@ function fileTransfer(event: DragEvent): DataTransfer | null {
   return null
 }
 
-function activeComposer(): HTMLTextAreaElement | null {
+function activeComposerCard(): HTMLElement | null {
   const cards = document.querySelectorAll<HTMLElement>('[data-composer-card]')
   for (let i = cards.length - 1; i >= 0; i -= 1) {
     const card = cards[i]
     if (card === undefined) continue
-    const textarea = card.querySelector('textarea')
-    if (textarea instanceof HTMLTextAreaElement && !textarea.disabled && !textarea.readOnly) return textarea
+    if (pickComposerSurface(card)?.editable === true) return card
   }
   return null
 }
 
-function insertIntoComposer(chunk: string): boolean {
-  const target = activeComposer()
-  if (target === null) return false
+function insertIntoTextarea(target: HTMLTextAreaElement, chunk: string): boolean {
+  if (target.disabled || target.readOnly) return false
   const { next, caret } = joinInsertion(target.value, chunk)
   const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
   if (nativeSetter === undefined) return false
@@ -62,6 +62,46 @@ function insertIntoComposer(chunk: string): boolean {
   target.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromDrop', data: chunk }))
   target.focus({ preventScroll: true })
   return true
+}
+
+function dispatchPlainPaste(target: HTMLElement, text: string): boolean {
+  try {
+    const dt = new DataTransfer()
+    dt.setData('text/plain', text)
+    const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt })
+    Object.defineProperty(paste, 'clipboardData', { value: dt })
+    target.dispatchEvent(paste)
+    return paste.defaultPrevented
+  } catch {
+    // DataTransfer or ClipboardEvent is missing in this document.
+    return false
+  }
+}
+
+function insertIntoContentEditable(target: HTMLElement, chunk: string): boolean {
+  if (target.getAttribute('contenteditable') !== 'true') return false
+  const { insert } = composerAppendText(target.innerText ?? target.textContent ?? '', chunk)
+  target.focus({ preventScroll: true })
+  const selection = window.getSelection()
+  if (selection !== null) {
+    const range = document.createRange()
+    range.selectNodeContents(target)
+    range.collapse(false)
+    selection.removeAllRanges()
+    selection.addRange(range)
+  }
+  if (dispatchPlainPaste(target, insert)) return true
+  return document.execCommand('insertText', false, insert)
+}
+
+function insertIntoComposer(chunk: string): boolean {
+  const card = activeComposerCard()
+  if (card === null) return false
+  const editable = card.querySelector<HTMLElement>('[data-composer-input][contenteditable="true"]')
+  if (editable !== null) return insertIntoContentEditable(editable, chunk)
+  const textarea = card.querySelector('textarea')
+  if (textarea instanceof HTMLTextAreaElement) return insertIntoTextarea(textarea, chunk)
+  return false
 }
 
 async function fileToBase64(file: File): Promise<string> {

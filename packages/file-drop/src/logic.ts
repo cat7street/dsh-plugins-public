@@ -171,6 +171,64 @@ export function joinInsertion(existing: string, chunk: string): { next: string; 
   return { next, caret: next.length }
 }
 
+/** Minimal composer surface the interceptor can write into. */
+export interface ComposerSurface {
+  readonly kind: 'textarea' | 'contenteditable'
+  readonly editable: boolean
+}
+
+/**
+ * Pick the last unlocked composer on a card: a contenteditable
+ * `[data-composer-input]`, or a leftover textarea from older shells.
+ */
+export function pickComposerSurface(card: {
+  querySelector: (selector: string) => { getAttribute: (name: string) => string | null } | null
+}): ComposerSurface | null {
+  const input = card.querySelector('[data-composer-input]')
+  if (input !== null) {
+    return {
+      kind: 'contenteditable',
+      editable: input.getAttribute('contenteditable') === 'true',
+    }
+  }
+  const textarea = card.querySelector('textarea')
+  if (textarea !== null) {
+    return {
+      kind: 'textarea',
+      editable: textarea.getAttribute('disabled') === null && textarea.getAttribute('readonly') === null,
+    }
+  }
+  return null
+}
+
+/** Last unlocked composer card among several, newest last. */
+export function pickActiveComposerSurface(cards: readonly {
+  querySelector: (selector: string) => { getAttribute: (name: string) => string | null } | null
+}[]): ComposerSurface | null {
+  for (let i = cards.length - 1; i >= 0; i -= 1) {
+    const card = cards[i]
+    if (card === undefined) continue
+    const surface = pickComposerSurface(card)
+    if (surface !== null && surface.editable) return surface
+  }
+  return null
+}
+
+/** Normalize contenteditable inner text so trailing paragraph breaks do not double-insert. */
+export function composerDraftText(raw: string): string {
+  return raw.replace(/\r\n/g, '\n').replace(/\u00a0/g, ' ').replace(/\n+$/g, '')
+}
+
+/**
+ * Payload to paste at the end of a contenteditable composer.
+ * `insert` is only the new characters; `next` is the full draft after append.
+ */
+export function composerAppendText(existingRaw: string, chunk: string): { insert: string; next: string } {
+  const existing = composerDraftText(existingRaw)
+  const { next } = joinInsertion(existing, chunk)
+  return { insert: next.slice(existing.length), next }
+}
+
 /** One dropped file the interceptor can inspect without the live File object. */
 export interface DroppedFile {
   readonly name: string
